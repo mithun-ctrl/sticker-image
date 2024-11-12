@@ -1,2 +1,0 @@
-dotenv==0.20.0
-telegraf==4.10.1
