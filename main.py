@@ -95,10 +95,10 @@ async def delete_messages_with_effects(client, chat_id, messages_info):
 @espada.on_message(filters.command("start"))
 async def start(client, message: Message):
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏠 Home", callback_data="home")],
-        [InlineKeyboardButton("ℹ️ About", callback_data="about")],
-        [InlineKeyboardButton("📞 Support", callback_data="support")],
-        [InlineKeyboardButton("❓ Help", callback_data="help")]
+        [InlineKeyboardButton("🏠 Home", callback_data="home"),
+        InlineKeyboardButton("ℹ️ About", callback_data="about")],
+        [InlineKeyboardButton("📞 Support", callback_data="support"),
+        InlineKeyboardButton("❓ Help", callback_data="help")]
     ])
 
     await client.send_photo(
