@@ -18,8 +18,8 @@ PK_STICKER_ID = os.getenv("pk_sticker_id")
 A14_STICKER_ID = os.getenv("a14_sticker_id")
 
 # Different sizes for each sticker
-PK_STICKER_SIZE = (260, 160)  # Width, Height for PK sticker
-A14_STICKER_SIZE = (300, 200)  # Width, Height for A14 sticker
+PK_STICKER_SIZE = (300, 160)  # Width, Height for PK sticker
+A14_STICKER_SIZE = (300, 250)  # Width, Height for A14 sticker
 
 # Loading animation frames (rotating hourglass)
 LOADING_FRAMES = ["⌛", "⏳"]
@@ -70,7 +70,7 @@ async def fade_out_message(message, original_text):
     for frame in FADE_FRAMES:
         try:
             await message.edit_text(frame.format(text=original_text))
-            await asyncio.sleep(0.7)  # Slower fade effect
+            await asyncio.sleep(0.7)
         except:
             break
 
@@ -79,7 +79,7 @@ async def delete_animation(message):
     for frame in DELETE_ANIMATIONS:
         try:
             await message.edit_text(frame)
-            await asyncio.sleep(0.5)  # Animation speed
+            await asyncio.sleep(0.5)
         except:
             break
 
@@ -92,11 +92,11 @@ async def delete_messages_with_effects(client, chat_id, messages_info):
                 if msg_text:  # Apply fade effect for text messages
                     await fade_out_message(message, msg_text)
                 await delete_animation(message)
-                await asyncio.sleep(1.0)  # Longer delay between messages
+                await asyncio.sleep(1.0)
                 await message.delete()
         except:
             pass
-        await asyncio.sleep(0.8)  # Delay between different messages
+        await asyncio.sleep(0.8)
 
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
@@ -144,6 +144,9 @@ async def handle_sticker_choice(client, callback_query: CallbackQuery):
         await callback_query.answer("Please send an image first!", show_alert=True)
         return
 
+    # Answer the callback query immediately to prevent the "loading" state
+    await callback_query.answer()
+
     # Get the stored data
     user_info = user_data[chat_id]
     photo_path = user_info['image_path']
@@ -156,45 +159,47 @@ async def handle_sticker_choice(client, callback_query: CallbackQuery):
         sticker_id = A14_STICKER_ID
         sticker_size = A14_STICKER_SIZE
     
-    # Show processing message
-    processing_msg = await callback_query.message.edit_text("⌛ Processing...")
-    user_info['messages_info'].append((processing_msg.id, "⌛ Processing..."))
-    
-    # Start loading animation in background
-    animation_task = asyncio.create_task(loading_animation(processing_msg))
-    
     try:
-        # Start deletion of previous messages during processing
-        deletion_task = asyncio.create_task(
+        # Show initial processing message without keyboard
+        await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
+        
+        # Start loading animation in background
+        animation_task = asyncio.create_task(loading_animation(callback_query.message))
+        
+        # Process the image in background
+        async def process_image():
+            # Download and process the sticker
+            sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
+            user_image = Image.open(photo_path).convert("RGBA")
+            sticker = Image.open(sticker_file).convert("RGBA")
+            sticker = sticker.resize(sticker_size, Image.LANCZOS)
+
+            # Calculate position and apply sticker
+            center_x = (user_image.width - sticker.width) // 2
+            center_y = (user_image.height - sticker.height) // 2
+            user_image.paste(sticker, (center_x, center_y), sticker)
+
+            # Save the modified image
+            output_path = f"{TEMP_DIR}/output_{chat_id}.png"
+            user_image.save(output_path)
+            return sticker_file, output_path
+
+        # Process image and clean up messages concurrently
+        processing_task = asyncio.create_task(process_image())
+        cleanup_task = asyncio.create_task(
             delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
         )
         
-        # Download and process the sticker
-        sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
-        user_image = Image.open(photo_path).convert("RGBA")
-        sticker = Image.open(sticker_file).convert("RGBA")
-        sticker = sticker.resize(sticker_size, Image.LANCZOS)
-
-        # Calculate position and apply sticker
-        center_x = (user_image.width - sticker.width) // 2
-        center_y = (user_image.height - sticker.height) // 2
-        user_image.paste(sticker, (center_x, center_y), sticker)
-
-        # Save the modified image
-        output_path = f"{TEMP_DIR}/output_{chat_id}.png"
-        user_image.save(output_path)
-
-        # Wait for deletion task to complete
-        await deletion_task
+        # Wait for both tasks to complete
+        sticker_file, output_path = await processing_task
+        await cleanup_task
         
-        # Cancel loading animation
+        # Cancel loading animation and delete processing message
         animation_task.cancel()
-        
-        # Delete the processing message with effects
         await delete_messages_with_effects(
             client, 
             chat_id, 
-            [(processing_msg.id, "⌛ Processing...")]
+            [(callback_query.message.id, "⌛ Processing...")]
         )
         
         # Send the final image
@@ -207,17 +212,15 @@ async def handle_sticker_choice(client, callback_query: CallbackQuery):
         del user_data[chat_id]
 
     except Exception as e:
-        # Cancel tasks
+        # Cancel tasks and show error
         animation_task.cancel()
-        await processing_msg.edit_text("Sorry, there was an error. Please try again.")
+        await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
         
         # Clean up if there was an error
         if chat_id in user_data:
             if os.path.exists(photo_path):
                 os.remove(photo_path)
             del user_data[chat_id]
-
-    await callback_query.answer()
 
 if __name__ == "__main__":
     app.run()
