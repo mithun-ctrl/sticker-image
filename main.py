@@ -18,8 +18,8 @@ PK_STICKER_ID = os.getenv("pk_sticker_id")
 A14_STICKER_ID = os.getenv("a14_sticker_id")
 
 # Different sizes for each sticker
-PK_STICKER_SIZE = (260, 160)  # Width, Height for PK sticker
-A14_STICKER_SIZE = (300, 200)  # Width, Height for A14 sticker
+PK_STICKER_SIZE = (360, 160)  # Width, Height for PK sticker
+A14_STICKER_SIZE = (300, 250)  # Width, Height for A14 sticker
 
 # Loading animation frames (rotating hourglass)
 LOADING_FRAMES = ["⌛", "⏳"]
