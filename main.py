@@ -62,6 +62,13 @@ async def handle_sticker(client, message: Message):
     user_image = Image.open(image_path).convert("RGBA")
     sticker = Image.open(sticker_path).convert("RGBA")
 
+    # Resize sticker if it exceeds image dimensions
+    max_sticker_width = user_image.width // 2
+    max_sticker_height = user_image.height // 2
+
+    if sticker.width > max_sticker_width or sticker.height > max_sticker_height:
+        sticker.thumbnail((max_sticker_width, max_sticker_height), Image.ANTIALIAS)
+
     # Calculate the position to center the sticker
     center_x = (user_image.width - sticker.width) // 2
     center_y = (user_image.height - sticker.height) // 2
