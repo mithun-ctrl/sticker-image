@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import tgcrypto
+from pyrogram.enums import ParseMode
 from PIL import Image
 import os
 from pymongo import MongoClient
@@ -106,7 +107,7 @@ async def start(client, message: Message):
         photo=START_IMAGE,
         caption=HOME_TEXT,
         reply_markup=keyboard,
-        parse_mode = "html"
+        parse_mode = ParseMode.HTML
     )
 
 @espada.on_message(filters.photo)
@@ -148,25 +149,25 @@ async def handle_callback(client, callback_query: CallbackQuery):
         await callback_query.edit_message_caption(
             caption=HOME_TEXT,
             reply_markup=callback_query.message.reply_markup,
-            parse_mode = "html"
+            parse_mode = ParseMode.HTML
         )
     elif data == "about" and current_caption != ABOUT_TEXT:
         await callback_query.edit_message_caption(
             caption=ABOUT_TEXT,
             reply_markup=callback_query.message.reply_markup,
-            parse_mode = "html"
+            parse_mode = ParseMode.HTML
         )
     elif data == "help" and current_caption != HELP_TEXT:
         await callback_query.edit_message_caption(
             caption=HELP_TEXT,
             reply_markup=callback_query.message.reply_markup,
-            parse_mode = "html"
+            parse_mode = ParseMode.HTML
         )
     elif data == "support" and current_caption != SUPPORT_TEXT:
         await callback_query.edit_message_caption(
             caption=SUPPORT_TEXT,
             reply_markup=callback_query.message.reply_markup,
-            parse_mode = "html"
+            parse_mode = ParseMode.HTML
         )
     elif data in ["sticker_pk", "sticker_a14"]:
         chat_id = callback_query.message.chat.id
