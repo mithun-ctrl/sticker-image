@@ -3,3 +3,4 @@ pillow==9.4.0
 pymongo==4.5.0
 dnspython==2.3.0
 python-dotenv==0.21.1
+tgcrypto==1.2.2
