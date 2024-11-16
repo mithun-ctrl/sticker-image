@@ -35,7 +35,23 @@ espada = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_T
 user_data = {}
 
 def photo_filter(_, __, message):
-    return bool(message.photo)
+    """
+    Filter that checks for photos in messages, including those sent by bots
+    Returns True if the message contains a photo, regardless of sender
+    """
+    # Check if message has photo attribute
+    has_photo = bool(message.photo)
+    
+    # If it's a photo, also check if it was forwarded from the target bot
+    if has_photo and message.from_user:
+        # You can add additional bot usernames to this list
+        bot_usernames = ["TierHarribelBot"]
+        sender_username = message.from_user.username
+        
+        # Return True for both direct photos and photos from the specified bot
+        return has_photo or (sender_username in bot_usernames)
+    
+    return has_photo
 photo_handler = filters.create(photo_filter)
 
 async def loading_animation(message):
@@ -117,6 +133,11 @@ async def start(client, message: Message):
 @espada.on_message(photo_handler)
 async def handle_image(client, message: Message):
     try:
+        
+        # Log the sender information for debugging
+        sender_info = f"Message from: {message.from_user.username if message.from_user else 'Unknown'}"
+        print(sender_info)
+        
         photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
         
         keyboard = InlineKeyboardMarkup([
@@ -140,6 +161,7 @@ async def handle_image(client, message: Message):
         }
         
     except Exception as e:
+        print(f"Error processing image: {str(e)}")  # Added error logging
         await message.reply("Sorry, there was an error processing your image. Please try again.")
         if message.chat.id in user_data:
             del user_data[message.chat.id]
