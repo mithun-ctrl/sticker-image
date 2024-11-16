@@ -5,62 +5,38 @@ from PIL import Image
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import io
 load_dotenv()
 
 # Bot Config
 API_ID = os.getenv("api_id")
 API_HASH = os.getenv("api_hash")
 BOT_TOKEN = os.getenv("bot_token")
+STICKER_ID = "CAACAgUAAxkBAAOiZzOa1iLzvrUf6qKJIFyB2bQMZ1EAAmMPAAJ7VoBVav_8h5kAAXANNgQ"
 
-# MongoDB Config
-MONGO_URI = os.getenv("mongo_uri")
-mongo_client = MongoClient(MONGO_URI)
-db = mongo_client["sticker_bot_db"]
-users_collection = db["users"]
-
-# Initialize Bot
-app = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# Temp Paths
 TEMP_DIR = "temp_files"
 if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
 
-# Command: Start
+# Initialize Bot
+app = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
-    user_id = message.from_user.id
-    if not users_collection.find_one({"_id": user_id}):
-        users_collection.insert_one({"_id": user_id})
-        await message.reply("Welcome! Send me an image and a sticker to apply the sticker in the center of your image!")
-    else:
-        await message.reply("Welcome back! Send me an image and a sticker to get started!")
+    await message.reply("Welcome! Send me an image, and I'll apply a predefined sticker to it!")
 
-# Image Handling
 @app.on_message(filters.photo)
 async def handle_image(client, message: Message):
-    # Download the image
+    # Download the image sent by the user
     photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
-    users_collection.update_one({"_id": message.from_user.id}, {"$set": {"last_image": photo_path}}, upsert=True)
-    await message.reply("Image saved! Now send me a sticker to apply it.")
+    await message.reply("Applying the sticker to your image...")
 
-# Sticker Handling
-@app.on_message(filters.sticker)
-async def handle_sticker(client, message: Message):
-    user_id = message.from_user.id
-    user_data = users_collection.find_one({"_id": user_id})
-    
-    if not user_data or "last_image" not in user_data:
-        await message.reply("Please send an image first before applying a sticker.")
-        return
+    # Download the predefined sticker as a PNG
+    sticker_file = await client.download_media(STICKER_ID, file_name=f"{TEMP_DIR}/sticker.png")
 
-    # Download the sticker
-    sticker_path = await message.download(file_name=f"{TEMP_DIR}/sticker_{message.chat.id}.png")
-
-    # Open the saved image and sticker
-    image_path = user_data["last_image"]
-    user_image = Image.open(image_path).convert("RGBA")
-    sticker = Image.open(sticker_path).convert("RGBA")
+    # Open the image and sticker
+    user_image = Image.open(photo_path).convert("RGBA")
+    sticker = Image.open(sticker_file).convert("RGBA")
 
     # Resize sticker if it exceeds image dimensions
     max_sticker_width = user_image.width // 2
@@ -84,13 +60,9 @@ async def handle_sticker(client, message: Message):
     await message.reply_photo(output_path)
 
     # Clean up temporary files
-    os.remove(image_path)
-    os.remove(sticker_path)
+    os.remove(photo_path)
+    os.remove(sticker_file)
     os.remove(output_path)
 
-    # Remove last image from the database
-    users_collection.update_one({"_id": user_id}, {"$unset": {"last_image": ""}})
-
-# Run the Bot
 if __name__ == "__main__":
     app.run()
