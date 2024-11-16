@@ -14,8 +14,8 @@ API_HASH = os.getenv("api_hash")
 BOT_TOKEN = os.getenv("bot_token")
 STICKER_ID = os.getenv("sticker_id")
 
-STICKER_WIDTH = 200  # Custom width for the sticker
-STICKER_HEIGHT = 150  # Custom height for the sticker
+STICKER_WIDTH = os.getenv("sticker_width") 
+STICKER_HEIGHT = os.getenv("sticker_height")
 
 # Temp Paths
 TEMP_DIR = "temp_files"
