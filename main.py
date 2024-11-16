@@ -36,22 +36,32 @@ user_data = {}
 
 def photo_filter(_, __, message):
     """
-    Filter that checks for photos in messages, including those sent by bots
-    Returns True if the message contains a photo, regardless of sender
+    Enhanced filter that checks for photos in messages, including those from bots
+    Returns True if the message contains a photo and meets specific criteria
     """
-    # Check if message has photo attribute
+    # Check if message has photo
     has_photo = bool(message.photo)
     
-    # If it's a photo, also check if it was forwarded from the target bot
-    if has_photo and message.from_user:
-        # You can add additional bot usernames to this list
-        bot_usernames = ["TierHarribelBot"]
-        sender_username = message.from_user.username
+    if not has_photo:
+        return False
         
-        # Return True for both direct photos and photos from the specified bot
-        return has_photo or (sender_username in bot_usernames)
-    
-    return has_photo
+    # Handle photos from TierHarribelBot
+    if message.from_user and message.from_user.is_bot:
+        if message.from_user.username == "TierHarribelBot":
+            return True
+            
+    # Handle forwarded messages from TierHarribelBot
+    if message.forward_from:
+        if message.forward_from.username == "TierHarribelBot":
+            return True
+            
+    # Handle normal user photos
+    if message.from_user and not message.from_user.is_bot:
+        return True
+        
+    return False
+
+
 photo_handler = filters.create(photo_filter)
 
 async def loading_animation(message):
@@ -133,13 +143,20 @@ async def start(client, message: Message):
 @espada.on_message(photo_handler)
 async def handle_image(client, message: Message):
     try:
+        # Log detailed message information for debugging
+        sender_info = {
+            "user_id": message.from_user.id if message.from_user else None,
+            "username": message.from_user.username if message.from_user else None,
+            "is_bot": message.from_user.is_bot if message.from_user else None,
+            "forward_from": message.forward_from.username if message.forward_from else None,
+            "has_photo": bool(message.photo)
+        }
+        print(f"Processing message: {sender_info}")
         
-        # Log the sender information for debugging
-        sender_info = f"Message from: {message.from_user.username if message.from_user else 'Unknown'}"
-        print(sender_info)
-        
+        # Download the photo
         photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
         
+        # Create keyboard for sticker selection
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("PK Sticker", callback_data="sticker_pk"),
@@ -147,11 +164,13 @@ async def handle_image(client, message: Message):
             ]
         ])
 
+        # Send sticker selection message
         choice_msg = await message.reply(
             "Choose which sticker you want to apply:",
             reply_markup=keyboard
         )
         
+        # Store message information for cleanup
         user_data[message.chat.id] = {
             'image_path': photo_path,
             'messages_info': [
@@ -161,9 +180,16 @@ async def handle_image(client, message: Message):
         }
         
     except Exception as e:
-        print(f"Error processing image: {str(e)}")  # Added error logging
+        print(f"Error in handle_image: {str(e)}")
         await message.reply("Sorry, there was an error processing your image. Please try again.")
+        # Cleanup on error
         if message.chat.id in user_data:
+            try:
+                if 'image_path' in user_data[message.chat.id]:
+                    if os.path.exists(user_data[message.chat.id]['image_path']):
+                        os.remove(user_data[message.chat.id]['image_path'])
+            except Exception as cleanup_error:
+                print(f"Cleanup error: {str(cleanup_error)}")
             del user_data[message.chat.id]
 
 @espada.on_callback_query()
