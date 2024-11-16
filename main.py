@@ -78,7 +78,6 @@ async def delete_animation(message):
         except:
             break
 
-
 async def delete_messages_with_effects(client, chat_id, messages_info):
     """Delete messages with fade-out and animation effects"""
     for msg_id, msg_text in messages_info:
@@ -93,74 +92,9 @@ async def delete_messages_with_effects(client, chat_id, messages_info):
         except:
             pass
         await asyncio.sleep(0.8)
-
-@espada.on_message(filters.command("start"))
-async def start(client, message: Message):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏠 Home", callback_data="home"),
-        InlineKeyboardButton("ℹ️ About", callback_data="about")],
-        [InlineKeyboardButton("📞 Support", callback_data="support"),
-        InlineKeyboardButton("❓ Help", callback_data="help")]
-    ])
-
-    await client.send_photo(
-        chat_id=message.chat.id,
-        photo=START_IMAGE,
-        caption=HOME_TEXT,
-        reply_markup=keyboard,
-        parse_mode = ParseMode.HTML
-    )
-
-@espada.on_message(filters.photo | filters.forwarded)
-async def handle_image(client, message: Message):
-    try:
-        # Check if the message contains a photo (either direct or forwarded)
-        if message.photo or (message.forward_from and hasattr(message, 'photo')):
-            photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
-            
-            keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("PK Sticker", callback_data="sticker_pk"),
-                    InlineKeyboardButton("A14 Sticker", callback_data="sticker_a14")
-                ]
-            ])
-
-            # Check if it's from your specific bot
-            is_from_imager_bot = (
-                message.forward_from and 
-                message.forward_from.is_bot and 
-                message.forward_from.username == POST_BOT_USERNAME  # Replace with your bot's username
-            )
-
-            if is_from_imager_bot:
-                # Automatically apply a default sticker (e.g., PK sticker) for images from IMager_Sender
-                user_data[message.chat.id] = {
-                    'image_path': photo_path,
-                    'messages_info': [(message.id, None)]
-                }
-                # Simulate a callback query with the default sticker
-                await process_image_with_sticker(client, message.chat.id, "sticker_pk")
-            else:
-                # For other images, show the sticker selection keyboard
-                choice_msg = await message.reply(
-                    "Choose which sticker you want to apply:",
-                    reply_markup=keyboard
-                )
-                
-                user_data[message.chat.id] = {
-                    'image_path': photo_path,
-                    'messages_info': [
-                        (message.id, None),
-                        (choice_msg.id, "Choose which sticker you want to apply:")
-                    ]
-                }
         
-    except Exception as e:
-        await message.reply("Sorry, there was an error processing your image. Please try again.")
-        if message.chat.id in user_data:
-            del user_data[message.chat.id]
-            
 async def process_image_with_sticker(client, chat_id, sticker_type):
+    """Process image with selected sticker"""
     try:
         # Get the stored data
         user_info = user_data[chat_id]
@@ -199,145 +133,130 @@ async def process_image_with_sticker(client, chat_id, sticker_type):
             del user_data[chat_id]
         raise e
 
+@espada.on_message(filters.command("start"))
+async def start(client, message: Message):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Home", callback_data="home"),
+        InlineKeyboardButton("ℹ️ About", callback_data="about")],
+        [InlineKeyboardButton("📞 Support", callback_data="support"),
+        InlineKeyboardButton("❓ Help", callback_data="help")]
+    ])
+
+    await client.send_photo(
+        chat_id=message.chat.id,
+        photo=START_IMAGE,
+        caption=HOME_TEXT,
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
+    )
+
+
+@espada.on_message(filters.photo | filters.forwarded)
+async def handle_image(client, message: Message):
+    try:
+        # Check if the message contains a photo (either direct or forwarded)
+        if message.photo or (message.forward_from and hasattr(message, 'photo')):
+            photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
+            
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("PK Sticker", callback_data="sticker_pk"),
+                    InlineKeyboardButton("A14 Sticker", callback_data="sticker_a14")
+                ]
+            ])
+
+            # Check if it's from your specific bot
+            is_from_imager_bot = (
+                message.forward_from and 
+                message.forward_from.is_bot and 
+                message.forward_from.username == POST_BOT_USERNAME
+            )
+
+            if is_from_imager_bot:
+                # Automatically apply a default sticker for images from IMager_Sender
+                user_data[message.chat.id] = {
+                    'image_path': photo_path,
+                    'messages_info': [(message.id, None)]
+                }
+                await process_image_with_sticker(client, message.chat.id, "sticker_pk")
+            else:
+                # For other images, show the sticker selection keyboard
+                choice_msg = await message.reply(
+                    "Choose which sticker you want to apply:",
+                    reply_markup=keyboard
+                )
+                
+                user_data[message.chat.id] = {
+                    'image_path': photo_path,
+                    'messages_info': [
+                        (message.id, None),
+                        (choice_msg.id, "Choose which sticker you want to apply:")
+                    ]
+                }
+        
+    except Exception as e:
+        await message.reply("Sorry, there was an error processing your image. Please try again.")
+        if message.chat.id in user_data:
+            photo_path = user_data[message.chat.id].get('image_path')
+            if photo_path and os.path.exists(photo_path):
+                os.remove(photo_path)
+            del user_data[message.chat.id]
+            
+
 @espada.on_callback_query()
 async def handle_callback(client, callback_query: CallbackQuery):
     data = callback_query.data
-    current_caption = callback_query.message.caption  # Get the current caption
-    
-    if data in ["sticker_pk", "sticker_a14"]:
-        chat_id = callback_query.message.chat.id
-        
-        if chat_id not in user_data:
-            await callback_query.answer("Please send an image first!", show_alert=True)
-            return
+    current_caption = callback_query.message.caption
 
-        try:
+    try:
+        if data in ["sticker_pk", "sticker_a14"]:
+            chat_id = callback_query.message.chat.id
+            
+            if chat_id not in user_data:
+                await callback_query.answer("Please send an image first!", show_alert=True)
+                return
+
             # Show initial processing message without keyboard
-            await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
+            processing_msg = await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
             
             # Start loading animation
-            animation_task = asyncio.create_task(loading_animation(callback_query.message))
+            animation_task = asyncio.create_task(loading_animation(processing_msg))
             
-            # Process image and clean up messages
-            processing_task = asyncio.create_task(process_image_with_sticker(client, chat_id, data))
-            cleanup_task = asyncio.create_task(
-                delete_messages_with_effects(client, chat_id, user_data[chat_id]['messages_info'][:-1])
-            )
-            
-            await processing_task
-            await cleanup_task
-            
-            # Cancel animation and delete processing message
-            animation_task.cancel()
-            await delete_messages_with_effects(
-                client, 
-                chat_id, 
-                [(callback_query.message.id, "⌛ Processing...")]
-            )
+            try:
+                # Process image and clean up messages
+                await process_image_with_sticker(client, chat_id, data)
+                await delete_messages_with_effects(client, chat_id, user_data[chat_id]['messages_info'])
+            finally:
+                # Cancel animation and delete processing message
+                animation_task.cancel()
+                await delete_messages_with_effects(
+                    client, 
+                    chat_id, 
+                    [(processing_msg.id, "⌛ Processing...")]
+                )
 
-        except Exception as e:
-            animation_task.cancel()
-            await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
-
-    elif data == "home" and current_caption != HOME_TEXT:
-        await callback_query.edit_message_caption(
-            caption=HOME_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "about" and current_caption != ABOUT_TEXT:
-        await callback_query.edit_message_caption(
-            caption=ABOUT_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "help" and current_caption != HELP_TEXT:
-        await callback_query.edit_message_caption(
-            caption=HELP_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "support" and current_caption != SUPPORT_TEXT:
-        await callback_query.edit_message_caption(
-            caption=SUPPORT_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data in ["sticker_pk", "sticker_a14"]:
-        chat_id = callback_query.message.chat.id
-        
-        # Check if user has data stored
-        if chat_id not in user_data:
-            await callback_query.answer("Please send an image first!", show_alert=True)
-            return
-
-        # Get the stored data
-        user_info = user_data[chat_id]
-        photo_path = user_info['image_path']
-        
-        # Determine which sticker and size to use
-        sticker_id = PK_STICKER_ID if data == "sticker_pk" else A14_STICKER_ID
-        sticker_size = PK_STICKER_SIZE if data == "sticker_pk" else A14_STICKER_SIZE
-        
-        try:
-            # Show initial processing message without keyboard
-            await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
+        elif data in ["home", "about", "help", "support"]:
+            caption_map = {
+                "home": HOME_TEXT,
+                "about": ABOUT_TEXT,
+                "help": HELP_TEXT,
+                "support": SUPPORT_TEXT
+            }
             
-            # Start loading animation
-            animation_task = asyncio.create_task(loading_animation(callback_query.message))
-            
-            # Process image
-            async def process_image():
-                sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
-                user_image = Image.open(photo_path).convert("RGBA")
-                sticker = Image.open(sticker_file).convert("RGBA")
-                sticker = sticker.resize(sticker_size, Image.LANCZOS)
+            if current_caption != caption_map[data]:
+                await callback_query.edit_message_caption(
+                    caption=caption_map[data],
+                    reply_markup=callback_query.message.reply_markup,
+                    parse_mode=ParseMode.HTML
+                )
 
-                center_x = (user_image.width - sticker.width) // 2
-                center_y = (user_image.height - sticker.height) // 2
-                user_image.paste(sticker, (center_x, center_y), sticker)
+        # Answer callback query
+        await callback_query.answer()
 
-                output_path = f"{TEMP_DIR}/output_{chat_id}.png"
-                user_image.save(output_path)
-                return sticker_file, output_path
-
-            # Process image and clean up messages
-            processing_task = asyncio.create_task(process_image())
-            cleanup_task = asyncio.create_task(
-                delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
-            )
-            
-            sticker_file, output_path = await processing_task
-            await cleanup_task
-            
-            # Cancel animation and delete processing message
-            animation_task.cancel()
-            await delete_messages_with_effects(
-                client, 
-                chat_id, 
-                [(callback_query.message.id, "⌛ Processing...")]
-            )
-            
-            # Send final image
-            await client.send_photo(chat_id, output_path)
-
-            # Cleanup
-            os.remove(photo_path)
-            os.remove(sticker_file)
-            os.remove(output_path)
-            del user_data[chat_id]
-
-        except Exception as e:
-            animation_task.cancel()
-            await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
-            
-            if chat_id in user_data:
-                if os.path.exists(photo_path):
-                    os.remove(photo_path)
-                del user_data[chat_id]
-    
-    # Answer callback query
-    await callback_query.answer()
+    except Exception as e:
+        await callback_query.answer("An error occurred. Please try again.", show_alert=True)
+        if callback_query.message.chat.id in user_data:
+            del user_data[callback_query.message.chat.id]
 
 if __name__ == "__main__":
     espada.run()
