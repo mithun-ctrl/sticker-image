@@ -21,46 +21,47 @@ LOADING_FRAMES = ["⌛", "⏳"]
 # Bot messages and content
 START_IMAGE = "https://jpcdn.it/img/small/40bee849ec8e13f51d463a8b9b6bcdcc.jpg"
 
-HOME_TEXT = """🏠 Welcome to our Sticker Bot!
-Send me any image and I'll help you add stickers to it.
+HOME_TEXT = """<b>🏠 Welcome to our Sticker Bot!</b>
+<i>Send me any image, and I'll help you add stickers to it.</i>
 
-Choose from the menu below to get started:"""
+<u>Choose from the menu below to get started:</u>
+"""
 
-ABOUT_TEXT = """ℹ️ **About Sticker Bot**
+ABOUT_TEXT = """<b>ℹ️ About Sticker Bot</b>
 
-This bot allows you to easily add custom stickers to your images. Simply send an image and choose from our selection.
+<i>This bot allows you to easily add custom stickers to your images.</i>
+• <b>Features:</b>
+  <code>• Easy to use interface</code>
+  <code>• Multiple sticker options</code>
+  <code>• High-quality output</code>
+  <code>• Fast processing</code>
 
-Features:
-• Easy to use interface
-• Multiple sticker options
-• High quality output
-• Fast processing
+<b>Version:</b> 1.0
+<b>Created with ❤️ by Our Team</b>
+"""
 
-Version: 1.0
-Created with ❤️ by Our Team"""
+HELP_TEXT = """<b>❓ How to Use Sticker Bot</b>
 
-HELP_TEXT = """❓ How to Use Sticker Bot
+<code>Follow these simple steps:</code>
+1️⃣ <i>Send any image to the bot</i>  
+2️⃣ <i>Choose your preferred sticker</i>  
+3️⃣ <i>Wait for processing</i>  
+4️⃣ <i>Receive your image with the sticker applied!</i>
 
-Follow these simple steps:
+<b>Tips:</b>
+• Use clear images for best results
+• Ensure the image is not too small
+"""
 
-1️⃣ Send any image to the bot
-2️⃣ Choose your preferred sticker from the options
-3️⃣ Wait for processing
-4️⃣ Receive your image with the sticker applied!
+SUPPORT_TEXT = """<b>📞 Need Help?</b>  
+<i>Join our support channel:</i>  
+<a href="https://t.me/espada_org">@espada_org</a>
 
-Tips:
-• Make sure your image is not too small
-• For best results, use clear images
-• Wait for processing to complete"""
+<i>Feel free to:</i>
+• Ask questions  
+• Report issues  
+• Suggest features  
+• Get updates  
 
-SUPPORT_TEXT = """📞 Need help? Join our support channel!
-
-Channel: @espada_org
-
-Feel free to:
-• Ask questions
-• Report issues
-• Suggest features
-• Get updates
-
-We're here to help! 🤝"""
+<b>We're here to help! 🤝</b>
+"""

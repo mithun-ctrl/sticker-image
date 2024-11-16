@@ -36,9 +36,14 @@ user_data = {}
 async def loading_animation(message):
     """Display rotating hourglass animation while processing"""
     frame_index = 0
+    last_content = None
     while True:
         try:
-            await message.edit_text(f"{LOADING_FRAMES[frame_index]} Processing...")
+            new_content = f"{LOADING_FRAMES[frame_index]} Processing..."
+            if new_content != last_content:  # Only update if content has changed
+                await message.edit_text(new_content)
+                last_content = new_content
+            
             frame_index = (frame_index + 1) % len(LOADING_FRAMES)
             await asyncio.sleep(0.8)
         except:
@@ -46,21 +51,31 @@ async def loading_animation(message):
 
 async def fade_out_message(message, original_text):
     """Apply fade-out effect to a message"""
+    last_content = None  # Track the last content
+    
     for frame in FADE_FRAMES:
         try:
-            await message.edit_text(frame.format(text=original_text))
+            new_content = frame.format(text=original_text)
+            if new_content != last_content:  # Only update if content has changed
+                await message.edit_text(new_content)
+                last_content = new_content
             await asyncio.sleep(0.7)
         except:
             break
 
 async def delete_animation(message):
     """Show deletion animation for a message"""
+    last_content = None  # Track the last content
+
     for frame in DELETE_ANIMATIONS:
         try:
-            await message.edit_text(frame)
+            if frame != last_content:  # Only update if content has changed
+                await message.edit_text(frame)
+                last_content = frame
             await asyncio.sleep(0.5)
         except:
             break
+
 
 async def delete_messages_with_effects(client, chat_id, messages_info):
     """Delete messages with fade-out and animation effects"""
@@ -90,7 +105,8 @@ async def start(client, message: Message):
         chat_id=message.chat.id,
         photo=START_IMAGE,
         caption=HOME_TEXT,
-        reply_markup=keyboard
+        reply_markup=keyboard,
+        parse_mode = "html"
     )
 
 @espada.on_message(filters.photo)
@@ -126,29 +142,32 @@ async def handle_image(client, message: Message):
 @espada.on_callback_query()
 async def handle_callback(client, callback_query: CallbackQuery):
     data = callback_query.data
-    
-    # Handle menu navigation
-    if data == "home":
+    current_caption = callback_query.message.caption  # Get the current caption
+
+    if data == "home" and current_caption != HOME_TEXT:
         await callback_query.edit_message_caption(
             caption=HOME_TEXT,
-            reply_markup=callback_query.message.reply_markup
+            reply_markup=callback_query.message.reply_markup,
+            parse_mode = "html"
         )
-    elif data == "about":
+    elif data == "about" and current_caption != ABOUT_TEXT:
         await callback_query.edit_message_caption(
             caption=ABOUT_TEXT,
-            reply_markup=callback_query.message.reply_markup
+            reply_markup=callback_query.message.reply_markup,
+            parse_mode = "html"
         )
-    elif data == "help":
+    elif data == "help" and current_caption != HELP_TEXT:
         await callback_query.edit_message_caption(
             caption=HELP_TEXT,
-            reply_markup=callback_query.message.reply_markup
+            reply_markup=callback_query.message.reply_markup,
+            parse_mode = "html"
         )
-    elif data == "support":
+    elif data == "support" and current_caption != SUPPORT_TEXT:
         await callback_query.edit_message_caption(
-            caption = SUPPORT_TEXT,
-            reply_markup=callback_query.message.reply_markup
+            caption=SUPPORT_TEXT,
+            reply_markup=callback_query.message.reply_markup,
+            parse_mode = "html"
         )
-    # Handle sticker selection
     elif data in ["sticker_pk", "sticker_a14"]:
         chat_id = callback_query.message.chat.id
         
