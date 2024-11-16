@@ -39,13 +39,19 @@ def photo_filter(_, __, message):
     Filter that checks for photos in messages, including those sent by bots
     Returns True if the message contains a photo, regardless of sender
     """
-   
-    bot_usernames = ["TierHarribelBot"]
-    has_photo = bool(message.photo or (message.document and message.document.mime_type.startswith("image/")))
-    sender_username = message.from_user.username if message.from_user else None
-
-    return has_photo and (not sender_username or sender_username in bot_usernames)
+    # Check if message has photo attribute
+    has_photo = bool(message.photo)
     
+    # If it's a photo, also check if it was forwarded from the target bot
+    if has_photo and message.from_user:
+        # You can add additional bot usernames to this list
+        bot_usernames = ["TierHarribelBot"]
+        sender_username = message.from_user.username
+        
+        # Return True for both direct photos and photos from the specified bot
+        return has_photo or (sender_username in bot_usernames)
+    
+    return has_photo
 photo_handler = filters.create(photo_filter)
 
 async def loading_animation(message):
