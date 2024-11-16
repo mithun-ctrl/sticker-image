@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import io
 import asyncio
 import time
-from script import DELETE_ANIMATIONS, LOADING_FRAMES, FADE_FRAMES
+from script import DELETE_ANIMATIONS, LOADING_FRAMES, FADE_FRAMES, START_IMAGE, HELP_TEXT, HOME_TEXT, ABOUT_TEXT, SUPPORT_TEXT
 load_dotenv()
 
 # Bot Config
@@ -28,7 +28,7 @@ if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
 
 # Initialize Bot
-app = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+espada = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # Store user's image paths and message IDs temporarily
 user_data = {}
@@ -77,17 +77,27 @@ async def delete_messages_with_effects(client, chat_id, messages_info):
             pass
         await asyncio.sleep(0.8)
 
-@app.on_message(filters.command("start"))
+@espada.on_message(filters.command("start"))
 async def start(client, message: Message):
-    await message.reply("Welcome! Send me an image, and I'll let you choose which sticker to apply!")
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Home", callback_data="home")],
+        [InlineKeyboardButton("ℹ️ About", callback_data="about")],
+        [InlineKeyboardButton("📞 Support", url="support")],
+        [InlineKeyboardButton("❓ Help", callback_data="help")]
+    ])
 
-@app.on_message(filters.photo)
+    await client.send_photo(
+        chat_id=message.chat.id,
+        photo=START_IMAGE,
+        caption=HOME_TEXT,
+        reply_markup=keyboard
+    )
+
+@espada.on_message(filters.photo)
 async def handle_image(client, message: Message):
     try:
-        # Download the image sent by the user
         photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
         
-        # Create inline keyboard with sticker options
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("PK Sticker", callback_data="sticker_pk"),
@@ -95,7 +105,6 @@ async def handle_image(client, message: Message):
             ]
         ])
 
-        # Send choice message and store relevant message IDs and image path
         choice_msg = await message.reply(
             "Choose which sticker you want to apply:",
             reply_markup=keyboard
@@ -104,7 +113,7 @@ async def handle_image(client, message: Message):
         user_data[message.chat.id] = {
             'image_path': photo_path,
             'messages_info': [
-                (message.id, None),  # None for photo message
+                (message.id, None),
                 (choice_msg.id, "Choose which sticker you want to apply:")
             ]
         }
@@ -114,92 +123,107 @@ async def handle_image(client, message: Message):
         if message.chat.id in user_data:
             del user_data[message.chat.id]
 
-@app.on_callback_query()
-async def handle_sticker_choice(client, callback_query: CallbackQuery):
-    chat_id = callback_query.message.chat.id
+@espada.on_callback_query()
+async def handle_callback(client, callback_query: CallbackQuery):
+    data = callback_query.data
     
-    # Check if user has data stored
-    if chat_id not in user_data:
-        await callback_query.answer("Please send an image first!", show_alert=True)
-        return
-
-    # Answer the callback query immediately to prevent the "loading" state
-    await callback_query.answer()
-
-    # Get the stored data
-    user_info = user_data[chat_id]
-    photo_path = user_info['image_path']
-    
-    # Determine which sticker and size to use
-    if callback_query.data == "sticker_pk":
-        sticker_id = PK_STICKER_ID
-        sticker_size = PK_STICKER_SIZE
-    else:
-        sticker_id = A14_STICKER_ID
-        sticker_size = A14_STICKER_SIZE
-    
-    try:
-        # Show initial processing message without keyboard
-        await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
-        
-        # Start loading animation in background
-        animation_task = asyncio.create_task(loading_animation(callback_query.message))
-        
-        # Process the image in background
-        async def process_image():
-            # Download and process the sticker
-            sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
-            user_image = Image.open(photo_path).convert("RGBA")
-            sticker = Image.open(sticker_file).convert("RGBA")
-            sticker = sticker.resize(sticker_size, Image.LANCZOS)
-
-            # Calculate position and apply sticker
-            center_x = (user_image.width - sticker.width) // 2
-            center_y = (user_image.height - sticker.height) // 2
-            user_image.paste(sticker, (center_x, center_y), sticker)
-
-            # Save the modified image
-            output_path = f"{TEMP_DIR}/output_{chat_id}.png"
-            user_image.save(output_path)
-            return sticker_file, output_path
-
-        # Process image and clean up messages concurrently
-        processing_task = asyncio.create_task(process_image())
-        cleanup_task = asyncio.create_task(
-            delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
+    # Handle menu navigation
+    if data == "home":
+        await callback_query.edit_message_caption(
+            caption=HOME_TEXT,
+            reply_markup=callback_query.message.reply_markup
         )
-        
-        # Wait for both tasks to complete
-        sticker_file, output_path = await processing_task
-        await cleanup_task
-        
-        # Cancel loading animation and delete processing message
-        animation_task.cancel()
-        await delete_messages_with_effects(
-            client, 
-            chat_id, 
-            [(callback_query.message.id, "⌛ Processing...")]
+    elif data == "about":
+        await callback_query.edit_message_caption(
+            caption=ABOUT_TEXT,
+            reply_markup=callback_query.message.reply_markup
         )
+    elif data == "help":
+        await callback_query.edit_message_caption(
+            caption=HELP_TEXT,
+            reply_markup=callback_query.message.reply_markup
+        )
+    elif data == "support":
+        await callback_query.edit_message_caption(
+            caption = SUPPORT_TEXT,
+            reply_markup=callback_query.message.reply_markup
+        )
+    # Handle sticker selection
+    elif data in ["sticker_pk", "sticker_a14"]:
+        chat_id = callback_query.message.chat.id
         
-        # Send the final image
-        await client.send_photo(chat_id, output_path)
+        # Check if user has data stored
+        if chat_id not in user_data:
+            await callback_query.answer("Please send an image first!", show_alert=True)
+            return
 
-        # Clean up temporary files
-        os.remove(photo_path)
-        os.remove(sticker_file)
-        os.remove(output_path)
-        del user_data[chat_id]
-
-    except Exception as e:
-        # Cancel tasks and show error
-        animation_task.cancel()
-        await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
+        # Get the stored data
+        user_info = user_data[chat_id]
+        photo_path = user_info['image_path']
         
-        # Clean up if there was an error
-        if chat_id in user_data:
-            if os.path.exists(photo_path):
-                os.remove(photo_path)
+        # Determine which sticker and size to use
+        sticker_id = PK_STICKER_ID if data == "sticker_pk" else A14_STICKER_ID
+        sticker_size = PK_STICKER_SIZE if data == "sticker_pk" else A14_STICKER_SIZE
+        
+        try:
+            # Show initial processing message without keyboard
+            await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
+            
+            # Start loading animation
+            animation_task = asyncio.create_task(loading_animation(callback_query.message))
+            
+            # Process image
+            async def process_image():
+                sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
+                user_image = Image.open(photo_path).convert("RGBA")
+                sticker = Image.open(sticker_file).convert("RGBA")
+                sticker = sticker.resize(sticker_size, Image.LANCZOS)
+
+                center_x = (user_image.width - sticker.width) // 2
+                center_y = (user_image.height - sticker.height) // 2
+                user_image.paste(sticker, (center_x, center_y), sticker)
+
+                output_path = f"{TEMP_DIR}/output_{chat_id}.png"
+                user_image.save(output_path)
+                return sticker_file, output_path
+
+            # Process image and clean up messages
+            processing_task = asyncio.create_task(process_image())
+            cleanup_task = asyncio.create_task(
+                delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
+            )
+            
+            sticker_file, output_path = await processing_task
+            await cleanup_task
+            
+            # Cancel animation and delete processing message
+            animation_task.cancel()
+            await delete_messages_with_effects(
+                client, 
+                chat_id, 
+                [(callback_query.message.id, "⌛ Processing...")]
+            )
+            
+            # Send final image
+            await client.send_photo(chat_id, output_path)
+
+            # Cleanup
+            os.remove(photo_path)
+            os.remove(sticker_file)
+            os.remove(output_path)
             del user_data[chat_id]
 
+        except Exception as e:
+            animation_task.cancel()
+            await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
+            
+            if chat_id in user_data:
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+                del user_data[chat_id]
+    
+    # Answer callback query
+    await callback_query.answer()
+
 if __name__ == "__main__":
-    app.run()
+    espada.run()
