@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-import TgCrypto
+import tgcrypto
 from pyrogram.types import Message
 from PIL import Image
 import os
