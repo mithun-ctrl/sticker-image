@@ -32,7 +32,7 @@ async def start(client, message: Message):
     user_id = message.from_user.id
     if not users_collection.find_one({"_id": user_id}):
         users_collection.insert_one({"_id": user_id})
-        await message.reply("Welcome! Send me an image and a sticker to apply the sticker on your image!")
+        await message.reply("Welcome! Send me an image and a sticker to apply the sticker in the center of your image!")
     else:
         await message.reply("Welcome back! Send me an image and a sticker to get started!")
 
@@ -62,13 +62,12 @@ async def handle_sticker(client, message: Message):
     user_image = Image.open(image_path).convert("RGBA")
     sticker = Image.open(sticker_path).convert("RGBA")
 
-    # Resize the sticker
-    sticker = sticker.resize((user_image.width // 4, user_image.height // 4))
+    # Calculate the position to center the sticker
+    center_x = (user_image.width - sticker.width) // 2
+    center_y = (user_image.height - sticker.height) // 2
+    position = (center_x, center_y)
 
-    # Define the position (bottom-right by default)
-    position = (user_image.width - sticker.width - 10, user_image.height - sticker.height - 10)
-
-    # Apply the sticker
+    # Apply the sticker in the center
     user_image.paste(sticker, position, sticker)
 
     # Save and send the modified image
