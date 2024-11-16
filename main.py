@@ -82,7 +82,7 @@ async def start(client, message: Message):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🏠 Home", callback_data="home")],
         [InlineKeyboardButton("ℹ️ About", callback_data="about")],
-        [InlineKeyboardButton("📞 Support", url="support")],
+        [InlineKeyboardButton("📞 Support", callback_data="support")],
         [InlineKeyboardButton("❓ Help", callback_data="help")]
     ])
 
