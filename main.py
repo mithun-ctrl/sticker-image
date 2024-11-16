@@ -12,8 +12,12 @@ load_dotenv()
 API_ID = os.getenv("api_id")
 API_HASH = os.getenv("api_hash")
 BOT_TOKEN = os.getenv("bot_token")
-STICKER_ID = "CAACAgUAAxkBAAOiZzOa1iLzvrUf6qKJIFyB2bQMZ1EAAmMPAAJ7VoBVav_8h5kAAXANNgQ"
+STICKER_ID = os.getenv("sticker_id")
 
+STICKER_WIDTH = 150  # Custom width for the sticker
+STICKER_HEIGHT = 150  # Custom height for the sticker
+
+# Temp Paths
 TEMP_DIR = "temp_files"
 if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
@@ -38,12 +42,8 @@ async def handle_image(client, message: Message):
     user_image = Image.open(photo_path).convert("RGBA")
     sticker = Image.open(sticker_file).convert("RGBA")
 
-    # Resize sticker if it exceeds image dimensions
-    max_sticker_width = user_image.width // 2
-    max_sticker_height = user_image.height // 2
-
-    if sticker.width > max_sticker_width or sticker.height > max_sticker_height:
-        sticker.thumbnail((max_sticker_width, max_sticker_height), Image.ANTIALIAS)
+    # Resize the sticker to custom dimensions (STICKER_WIDTH x STICKER_HEIGHT)
+    sticker = sticker.resize((STICKER_WIDTH, STICKER_HEIGHT), Image.ANTIALIAS)
 
     # Calculate the position to center the sticker
     center_x = (user_image.width - sticker.width) // 2
