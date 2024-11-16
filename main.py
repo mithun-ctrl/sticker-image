@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import io
 import asyncio
 import time
+from script import DELETE_ANIMATIONS, LOADING_FRAMES, FADE_FRAMES
 load_dotenv()
 
 # Bot Config
@@ -20,28 +21,6 @@ A14_STICKER_ID = os.getenv("a14_sticker_id")
 # Different sizes for each sticker
 PK_STICKER_SIZE = (300, 160)  # Width, Height for PK sticker
 A14_STICKER_SIZE = (300, 250)  # Width, Height for A14 sticker
-
-# Loading animation frames (rotating hourglass)
-LOADING_FRAMES = ["⌛", "⏳"]
-
-# Fade-out and deletion animation frames
-FADE_FRAMES = [
-    "🌕 {text}",
-    "🌔 {text}",
-    "🌓 {text}",
-    "🌒 {text}",
-    "🌑 {text}",
-    "⬛️"
-]
-
-DELETE_ANIMATIONS = [
-    "∎∎∎∎∎",
-    "□∎∎∎∎",
-    "□□∎∎∎",
-    "□□□∎∎",
-    "□□□□∎",
-    "□□□□□"
-]
 
 # Temp Paths
 TEMP_DIR = "temp_files"
