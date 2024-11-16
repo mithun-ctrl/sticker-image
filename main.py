@@ -18,11 +18,30 @@ PK_STICKER_ID = os.getenv("pk_sticker_id")
 A14_STICKER_ID = os.getenv("a14_sticker_id")
 
 # Different sizes for each sticker
-PK_STICKER_SIZE = (360, 160)  # Width, Height for PK sticker
-A14_STICKER_SIZE = (300, 250)  # Width, Height for A14 sticker
+PK_STICKER_SIZE = (260, 160)  # Width, Height for PK sticker
+A14_STICKER_SIZE = (300, 200)  # Width, Height for A14 sticker
 
 # Loading animation frames (rotating hourglass)
 LOADING_FRAMES = ["⌛", "⏳"]
+
+# Fade-out and deletion animation frames
+FADE_FRAMES = [
+    "🌕 {text}",
+    "🌔 {text}",
+    "🌓 {text}",
+    "🌒 {text}",
+    "🌑 {text}",
+    "⬛️"
+]
+
+DELETE_ANIMATIONS = [
+    "∎∎∎∎∎",
+    "□∎∎∎∎",
+    "□□∎∎∎",
+    "□□□∎∎",
+    "□□□□∎",
+    "□□□□□"
+]
 
 # Temp Paths
 TEMP_DIR = "temp_files"
@@ -32,8 +51,8 @@ if not os.path.exists(TEMP_DIR):
 # Initialize Bot
 app = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Store user's image paths temporarily
-user_images = {}
+# Store user's image paths and message IDs temporarily
+user_data = {}
 
 async def loading_animation(message):
     """Display rotating hourglass animation while processing"""
@@ -46,6 +65,39 @@ async def loading_animation(message):
         except:
             break
 
+async def fade_out_message(message, original_text):
+    """Apply fade-out effect to a message"""
+    for frame in FADE_FRAMES:
+        try:
+            await message.edit_text(frame.format(text=original_text))
+            await asyncio.sleep(0.7)  # Slower fade effect
+        except:
+            break
+
+async def delete_animation(message):
+    """Show deletion animation for a message"""
+    for frame in DELETE_ANIMATIONS:
+        try:
+            await message.edit_text(frame)
+            await asyncio.sleep(0.5)  # Animation speed
+        except:
+            break
+
+async def delete_messages_with_effects(client, chat_id, messages_info):
+    """Delete messages with fade-out and animation effects"""
+    for msg_id, msg_text in messages_info:
+        try:
+            message = await client.get_messages(chat_id, msg_id)
+            if message:
+                if msg_text:  # Apply fade effect for text messages
+                    await fade_out_message(message, msg_text)
+                await delete_animation(message)
+                await asyncio.sleep(1.0)  # Longer delay between messages
+                await message.delete()
+        except:
+            pass
+        await asyncio.sleep(0.8)  # Delay between different messages
+
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply("Welcome! Send me an image, and I'll let you choose which sticker to apply!")
@@ -56,9 +108,6 @@ async def handle_image(client, message: Message):
         # Download the image sent by the user
         photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
         
-        # Store the image path for this user
-        user_images[message.chat.id] = photo_path
-
         # Create inline keyboard with sticker options
         keyboard = InlineKeyboardMarkup([
             [
@@ -67,27 +116,37 @@ async def handle_image(client, message: Message):
             ]
         ])
 
-        await message.reply(
+        # Send choice message and store relevant message IDs and image path
+        choice_msg = await message.reply(
             "Choose which sticker you want to apply:",
             reply_markup=keyboard
         )
         
+        user_data[message.chat.id] = {
+            'image_path': photo_path,
+            'messages_info': [
+                (message.id, None),  # None for photo message
+                (choice_msg.id, "Choose which sticker you want to apply:")
+            ]
+        }
+        
     except Exception as e:
         await message.reply("Sorry, there was an error processing your image. Please try again.")
-        if message.chat.id in user_images:
-            del user_images[message.chat.id]
+        if message.chat.id in user_data:
+            del user_data[message.chat.id]
 
 @app.on_callback_query()
 async def handle_sticker_choice(client, callback_query: CallbackQuery):
     chat_id = callback_query.message.chat.id
     
-    # Check if user has an image stored
-    if chat_id not in user_images:
+    # Check if user has data stored
+    if chat_id not in user_data:
         await callback_query.answer("Please send an image first!", show_alert=True)
         return
 
-    # Get the stored image path
-    photo_path = user_images[chat_id]
+    # Get the stored data
+    user_info = user_data[chat_id]
+    photo_path = user_info['image_path']
     
     # Determine which sticker and size to use
     if callback_query.data == "sticker_pk":
@@ -97,57 +156,66 @@ async def handle_sticker_choice(client, callback_query: CallbackQuery):
         sticker_id = A14_STICKER_ID
         sticker_size = A14_STICKER_SIZE
     
-    # Show initial processing message
+    # Show processing message
     processing_msg = await callback_query.message.edit_text("⌛ Processing...")
+    user_info['messages_info'].append((processing_msg.id, "⌛ Processing..."))
     
     # Start loading animation in background
     animation_task = asyncio.create_task(loading_animation(processing_msg))
     
     try:
-        # Download the chosen sticker
+        # Start deletion of previous messages during processing
+        deletion_task = asyncio.create_task(
+            delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
+        )
+        
+        # Download and process the sticker
         sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
-
-        # Open the image and sticker
         user_image = Image.open(photo_path).convert("RGBA")
         sticker = Image.open(sticker_file).convert("RGBA")
-
-        # Resize the sticker to the appropriate dimensions
         sticker = sticker.resize(sticker_size, Image.LANCZOS)
 
-        # Calculate the position to center the sticker
+        # Calculate position and apply sticker
         center_x = (user_image.width - sticker.width) // 2
         center_y = (user_image.height - sticker.height) // 2
-        position = (center_x, center_y)
-
-        # Apply the sticker in the center
-        user_image.paste(sticker, position, sticker)
+        user_image.paste(sticker, (center_x, center_y), sticker)
 
         # Save the modified image
         output_path = f"{TEMP_DIR}/output_{chat_id}.png"
         user_image.save(output_path)
 
+        # Wait for deletion task to complete
+        await deletion_task
+        
         # Cancel loading animation
         animation_task.cancel()
         
+        # Delete the processing message with effects
+        await delete_messages_with_effects(
+            client, 
+            chat_id, 
+            [(processing_msg.id, "⌛ Processing...")]
+        )
+        
         # Send the final image
-        await callback_query.message.reply_photo(output_path)
+        await client.send_photo(chat_id, output_path)
 
         # Clean up temporary files
         os.remove(photo_path)
         os.remove(sticker_file)
         os.remove(output_path)
-        del user_images[chat_id]
+        del user_data[chat_id]
 
     except Exception as e:
-        # Cancel loading animation
+        # Cancel tasks
         animation_task.cancel()
         await processing_msg.edit_text("Sorry, there was an error. Please try again.")
         
         # Clean up if there was an error
-        if chat_id in user_images:
+        if chat_id in user_data:
             if os.path.exists(photo_path):
                 os.remove(photo_path)
-            del user_images[chat_id]
+            del user_data[chat_id]
 
     await callback_query.answer()
 
