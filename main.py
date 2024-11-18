@@ -49,17 +49,42 @@ async def set_user_position(user_id: int, x_pos: int, y_pos: int):
 
 def apply_sticker(image_path: str, sticker_path: str, x_offset: int, y_offset: int) -> str:
     try:
+        # Open and convert images to RGBA
         base_image = Image.open(image_path).convert('RGBA')
         sticker = Image.open(sticker_path).convert('RGBA')
         
+        # Get dimensions
+        base_width, base_height = base_image.size
+        sticker_width, sticker_height = sticker.size
+        
+        # Adjust position to ensure sticker stays within bounds
+        x_pos = min(max(0, x_offset), base_width - sticker_width)
+        y_pos = min(max(0, y_offset), base_height - sticker_height)
+        
+        # If sticker is larger than base image, resize it to fit
+        if sticker_width > base_width or sticker_height > base_height:
+            # Calculate scaling factor to fit within base image
+            scale_width = base_width / sticker_width
+            scale_height = base_height / sticker_height
+            scale_factor = min(scale_width, scale_height, 1.0) * 0.9  # 90% of max size for padding
+            
+            new_width = int(sticker_width * scale_factor)
+            new_height = int(sticker_height * scale_factor)
+            
+            sticker = sticker.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Recalculate position with new dimensions
+            x_pos = min(max(0, x_offset), base_width - new_width)
+            y_pos = min(max(0, y_offset), base_height - new_height)
+        
+        # Create new image and paste base image
         new_image = Image.new('RGBA', base_image.size, (0, 0, 0, 0))
         new_image.paste(base_image, (0, 0))
         
-        x_pos = x_offset
-        y_pos = y_offset
-        
+        # Paste sticker
         new_image.paste(sticker, (x_pos, y_pos), sticker)
         
+        # Save and return
         output_path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         new_image.save(output_path)
         return output_path
