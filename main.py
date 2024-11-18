@@ -34,36 +34,6 @@ espada = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_T
 # Store user's image paths and message IDs temporarily
 user_data = {}
 
-def photo_filter(_, __, message):
-    """
-    Enhanced filter that checks for photos in messages, including those from bots
-    Returns True if the message contains a photo and meets specific criteria
-    """
-    # Check if message has photo
-    has_photo = bool(message.photo)
-    
-    if not has_photo:
-        return False
-        
-    # Handle photos from TierHarribelBot
-    if message.from_user and message.from_user.is_bot:
-        if message.from_user.username == "TierHarribelBot":
-            return True
-            
-    # Handle forwarded messages from TierHarribelBot
-    if message.forward_from:
-        if message.forward_from.username == "TierHarribelBot":
-            return True
-            
-    # Handle normal user photos
-    if message.from_user and not message.from_user.is_bot:
-        return True
-        
-    return False
-
-
-photo_handler = filters.create(photo_filter)
-
 async def loading_animation(message):
     """Display rotating hourglass animation while processing"""
     frame_index = 0
@@ -140,19 +110,9 @@ async def start(client, message: Message):
         parse_mode = ParseMode.HTML
     )
 
-@espada.on_message(photo_handler)
+@espada.on_message(filter.photo)
 async def handle_image(client, message: Message):
     try:
-        # Log detailed message information for debugging
-        sender_info = {
-            "user_id": message.from_user.id if message.from_user else None,
-            "username": message.from_user.username if message.from_user else None,
-            "is_bot": message.from_user.is_bot if message.from_user else None,
-            "forward_from": message.forward_from.username if message.forward_from else None,
-            "has_photo": bool(message.photo)
-        }
-        print(f"Processing message: {sender_info}")
-        
         # Download the photo
         photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
         
