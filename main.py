@@ -1,261 +1,188 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-import tgcrypto
-from pyrogram.enums import ParseMode
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from PIL import Image
+from motor.motor_asyncio import AsyncIOMotorClient
 import os
-from pymongo import MongoClient
-from dotenv import load_dotenv
-import io
-import asyncio
-import time
-from script import DELETE_ANIMATIONS, LOADING_FRAMES, FADE_FRAMES, START_IMAGE, HELP_TEXT, HOME_TEXT, ABOUT_TEXT, SUPPORT_TEXT
-load_dotenv()
+from datetime import datetime
+from config import MONGO_URI, COLLECTION_NAME, DB_NAME, STICKERS, API_HASH, API_ID, BOT_TOKEN
 
-# Bot Config
-API_ID = os.getenv("api_id")
-API_HASH = os.getenv("api_hash")
-BOT_TOKEN = os.getenv("bot_token")
-PK_STICKER_ID = os.getenv("pk_sticker_id")
-A14_STICKER_ID = os.getenv("a14_sticker_id")
+api_id = API_ID
+api_hash = API_HASH
+bot_token = BOT_TOKEN
 
-# Different sizes for each sticker
-PK_STICKER_SIZE = (300, 140)  # Width, Height for PK sticker
-A14_STICKER_SIZE = (220, 100)  # Width, Height for A14 sticker
+app = Client("sticker_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Temp Paths
-TEMP_DIR = "temp_files"
-if not os.path.exists(TEMP_DIR):
-    os.makedirs(TEMP_DIR)
+# Initialize MongoDB client
+mongo_client = AsyncIOMotorClient(MONGO_URI)
+db = mongo_client[DB_NAME]
+user_preferences = db[COLLECTION_NAME]
 
-# Initialize Bot
-espada = Client("sticker_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Store temporary image paths
+temp_images = {}
 
-# Store user's image paths and message IDs temporarily
-user_data = {}
+async def get_user_position(user_id: int) -> tuple:
+    user_data = await user_preferences.find_one({"_id": user_id})
+    if user_data is None:
+        await set_user_position(user_id, 0, 0)
+        return 0, 0
+    return user_data["x_position"], user_data["y_position"]
 
-async def loading_animation(message):
-    """Display rotating hourglass animation while processing"""
-    frame_index = 0
-    last_content = None
-    while True:
-        try:
-            new_content = f"{LOADING_FRAMES[frame_index]} Processing..."
-            if new_content != last_content:  # Only update if content has changed
-                await message.edit_text(new_content)
-                last_content = new_content
-            
-            frame_index = (frame_index + 1) % len(LOADING_FRAMES)
-            await asyncio.sleep(0.8)
-        except:
-            break
-
-async def fade_out_message(message, original_text):
-    """Apply fade-out effect to a message"""
-    last_content = None  # Track the last content
-    
-    for frame in FADE_FRAMES:
-        try:
-            new_content = frame.format(text=original_text)
-            if new_content != last_content:  # Only update if content has changed
-                await message.edit_text(new_content)
-                last_content = new_content
-            await asyncio.sleep(0.7)
-        except:
-            break
-
-async def delete_animation(message):
-    """Show deletion animation for a message"""
-    last_content = None  # Track the last content
-
-    for frame in DELETE_ANIMATIONS:
-        try:
-            if frame != last_content:  # Only update if content has changed
-                await message.edit_text(frame)
-                last_content = frame
-            await asyncio.sleep(0.5)
-        except:
-            break
-
-
-async def delete_messages_with_effects(client, chat_id, messages_info):
-    """Delete messages with fade-out and animation effects"""
-    for msg_id, msg_text in messages_info:
-        try:
-            message = await client.get_messages(chat_id, msg_id)
-            if message:
-                if msg_text:  # Apply fade effect for text messages
-                    await fade_out_message(message, msg_text)
-                await delete_animation(message)
-                await asyncio.sleep(1.0)
-                await message.delete()
-        except:
-            pass
-        await asyncio.sleep(0.8)
-
-@espada.on_message(filters.command("start"))
-async def start(client, message: Message):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏠 Home", callback_data="home"),
-        InlineKeyboardButton("ℹ️ About", callback_data="about")],
-        [InlineKeyboardButton("📞 Support", callback_data="support"),
-        InlineKeyboardButton("❓ Help", callback_data="help")]
-    ])
-
-    await client.send_photo(
-        chat_id=message.chat.id,
-        photo=START_IMAGE,
-        caption=HOME_TEXT,
-        reply_markup=keyboard,
-        parse_mode = ParseMode.HTML
+async def set_user_position(user_id: int, x_pos: int, y_pos: int):
+    await user_preferences.update_one(
+        {"_id": user_id},
+        {
+            "$set": {
+                "x_position": x_pos,
+                "y_position": y_pos,
+                "updated_at": datetime.utcnow()
+            }
+        },
+        upsert=True
     )
 
-@espada.on_message(filters.photo)
-async def handle_image(client, message: Message):
+def apply_sticker(image_path: str, sticker_path: str, x_offset: int, y_offset: int) -> str:
+    base_image = Image.open(image_path).convert('RGBA')
+    sticker = Image.open(sticker_path).convert('RGBA')
+    
+    new_image = Image.new('RGBA', base_image.size, (0, 0, 0, 0))
+    new_image.paste(base_image, (0, 0))
+    
+    x_pos = x_offset
+    y_pos = y_offset
+    
+    new_image.paste(sticker, (x_pos, y_pos), sticker)
+    
+    output_path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+    new_image.save(output_path)
+    return output_path
+
+def get_sticker_selection_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("PK", callback_data="sticker_pk"),
+            InlineKeyboardButton("A14", callback_data="sticker_a14"),
+            InlineKeyboardButton("Cancel", callback_data="cancel_sticker")
+        ]
+    ])
+
+@app.on_message(filters.command("start"))
+async def start_command(client, message):
+    welcome_text = (
+        "Welcome to the Sticker Bot! 🎉\n\n"
+        "Commands:\n"
+        "📌 /sticker or /st - Apply sticker to an image\n"
+        "⚙️ /set x y - Set sticker position (e.g., /set 100 100)\n"
+        "❓ /position - Check your current sticker position"
+    )
+    await message.reply_text(welcome_text)
+
+@app.on_message(filters.command("position"))
+async def get_position_command(client, message):
+    x, y = await get_user_position(message.from_user.id)
+    await message.reply_text(f"Your current sticker position is x:{x}, y:{y}")
+
+@app.on_message(filters.command("set"))
+async def set_position(client, message):
     try:
-        # Download the photo
-        photo_path = await message.download(file_name=f"{TEMP_DIR}/image_{message.chat.id}.png")
+        _, x, y = message.text.split()
+        x, y = int(x), int(y)
         
-        # Create keyboard for sticker selection
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("PK Sticker", callback_data="sticker_pk"),
-                InlineKeyboardButton("A14 Sticker", callback_data="sticker_a14")
-            ]
-        ])
+        if x < 0 or y < 0:
+            raise ValueError("Coordinates must be positive numbers")
+        
+        await set_user_position(message.from_user.id, x, y)
+        
+        await message.reply_text(
+            f"✅ Sticker position set to x:{x}, y:{y}\n"
+            "Send an image and reply with /sticker to test it!"
+        )
+    except ValueError:
+        await message.reply_text(
+            "❌ Please use the correct format: /set x y\n"
+            "Example: /set 100 100\n"
+            "Note: Coordinates must be positive numbers"
+        )
 
-        # Send sticker selection message
-        choice_msg = await message.reply(
-            "Choose which sticker you want to apply:",
-            reply_markup=keyboard
+@app.on_message(filters.command(["sticker", "st"]))
+async def handle_sticker_command(client, message):
+    if message.reply_to_message and message.reply_to_message.photo:
+        # Download and store the image path temporarily
+        photo_path = await message.reply_to_message.download()
+        temp_images[message.from_user.id] = photo_path
+        
+        # Show sticker selection buttons
+        await message.reply_text(
+            "Please select a sticker to apply:",
+            reply_markup=get_sticker_selection_keyboard()
         )
-        
-        # Store message information for cleanup
-        user_data[message.chat.id] = {
-            'image_path': photo_path,
-            'messages_info': [
-                (message.id, None),
-                (choice_msg.id, "Choose which sticker you want to apply:")
-            ]
-        }
-        
-    except Exception as e:
-        print(f"Error in handle_image: {str(e)}")
-        await message.reply("Sorry, there was an error processing your image. Please try again.")
-        # Cleanup on error
-        if message.chat.id in user_data:
-            try:
-                if 'image_path' in user_data[message.chat.id]:
-                    if os.path.exists(user_data[message.chat.id]['image_path']):
-                        os.remove(user_data[message.chat.id]['image_path'])
-            except Exception as cleanup_error:
-                print(f"Cleanup error: {str(cleanup_error)}")
-            del user_data[message.chat.id]
+    else:
+        await message.reply_text(
+            "⚠️ Please reply to an image with /sticker or /st command\n"
+            "Example:\n"
+            "1. Send an image\n"
+            "2. Reply to it with /sticker"
+        )
 
-@espada.on_callback_query()
-async def handle_callback(client, callback_query: CallbackQuery):
-    data = callback_query.data
-    current_caption = callback_query.message.caption  # Get the current caption
+@app.on_callback_query(filters.regex('^sticker_|^cancel_'))
+async def handle_sticker_selection(client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    
+    if callback_query.data == "cancel_sticker":
+        # Clean up stored image
+        if user_id in temp_images:
+            os.remove(temp_images[user_id])
+            del temp_images[user_id]
+        await callback_query.message.edit_text("❌ Sticker application cancelled")
+        return
 
-    if data == "home" and current_caption != HOME_TEXT:
-        await callback_query.edit_message_caption(
-            caption=HOME_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "about" and current_caption != ABOUT_TEXT:
-        await callback_query.edit_message_caption(
-            caption=ABOUT_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "help" and current_caption != HELP_TEXT:
-        await callback_query.edit_message_caption(
-            caption=HELP_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data == "support" and current_caption != SUPPORT_TEXT:
-        await callback_query.edit_message_caption(
-            caption=SUPPORT_TEXT,
-            reply_markup=callback_query.message.reply_markup,
-            parse_mode = ParseMode.HTML
-        )
-    elif data in ["sticker_pk", "sticker_a14"]:
-        chat_id = callback_query.message.chat.id
-        
-        # Check if user has data stored
-        if chat_id not in user_data:
-            await callback_query.answer("Please send an image first!", show_alert=True)
+    try:
+        if user_id not in temp_images:
+            await callback_query.answer("❌ No image found. Please try again.", show_alert=True)
             return
 
-        # Get the stored data
-        user_info = user_data[chat_id]
-        photo_path = user_info['image_path']
-        
-        # Determine which sticker and size to use
-        sticker_id = PK_STICKER_ID if data == "sticker_pk" else A14_STICKER_ID
-        sticker_size = PK_STICKER_SIZE if data == "sticker_pk" else A14_STICKER_SIZE
-        
-        try:
-            # Show initial processing message without keyboard
-            await callback_query.message.edit_text("⌛ Processing...", reply_markup=None)
-            
-            # Start loading animation
-            animation_task = asyncio.create_task(loading_animation(callback_query.message))
-            
-            # Process image
-            async def process_image():
-                sticker_file = await client.download_media(sticker_id, file_name=f"{TEMP_DIR}/sticker_{chat_id}.png")
-                user_image = Image.open(photo_path).convert("RGBA")
-                sticker = Image.open(sticker_file).convert("RGBA")
-                sticker = sticker.resize(sticker_size, Image.LANCZOS)
+        # Get selected sticker
+        sticker_type = callback_query.data.split('_')[1]
+        sticker_file_id = STICKERS[sticker_type]
 
-                center_x = (user_image.width - sticker.width) // 2
-                center_y = (user_image.height - sticker.height) // 2
-                user_image.paste(sticker, (center_x, center_y), sticker)
+        # Show processing message
+        await callback_query.message.edit_text("Processing your image... 🔄")
 
-                output_path = f"{TEMP_DIR}/output_{chat_id}.png"
-                user_image.save(output_path)
-                return sticker_file, output_path
+        # Download the sticker
+        sticker_path = await client.download_media(sticker_file_id)
 
-            # Process image and clean up messages
-            processing_task = asyncio.create_task(process_image())
-            cleanup_task = asyncio.create_task(
-                delete_messages_with_effects(client, chat_id, user_info['messages_info'][:-1])
-            )
-            
-            sticker_file, output_path = await processing_task
-            await cleanup_task
-            
-            # Cancel animation and delete processing message
-            animation_task.cancel()
-            await delete_messages_with_effects(
-                client, 
-                chat_id, 
-                [(callback_query.message.id, "⌛ Processing...")]
-            )
-            
-            # Send final image
-            await client.send_photo(chat_id, output_path)
+        # Get user's position preferences
+        x_offset, y_offset = await get_user_position(user_id)
 
-            # Cleanup
-            os.remove(photo_path)
-            os.remove(sticker_file)
-            os.remove(output_path)
-            del user_data[chat_id]
+        # Apply the sticker
+        output_path = apply_sticker(temp_images[user_id], sticker_path, x_offset, y_offset)
 
-        except Exception as e:
-            animation_task.cancel()
-            await callback_query.message.edit_text("Sorry, there was an error. Please try again.")
-            
-            if chat_id in user_data:
-                if os.path.exists(photo_path):
-                    os.remove(photo_path)
-                del user_data[chat_id]
-    
-    # Answer callback query
-    await callback_query.answer()
+        # Send the processed image
+        await callback_query.message.reply_photo(
+            output_path,
+            caption=f"Here's your image with the {sticker_type.upper()} sticker! 🎉"
+        )
+
+        # Clean up
+        os.remove(temp_images[user_id])
+        os.remove(sticker_path)
+        os.remove(output_path)
+        del temp_images[user_id]
+
+        await callback_query.message.delete()
+
+    except Exception as e:
+        await callback_query.message.edit_text(f"❌ Error processing image: {str(e)}")
+        if user_id in temp_images:
+            os.remove(temp_images[user_id])
+            del temp_images[user_id]
+
+@app.on_message(filters.error)
+async def error_handler(client, message):
+    await message.reply_text(
+        "❌ An error occurred while processing your request.\n"
+        "Please try again later or contact support if the issue persists."
+    )
 
 if __name__ == "__main__":
-    espada.run()
+    print("Bot is starting... 🚀")
+    app.run()

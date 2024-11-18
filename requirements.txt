@@ -1,6 +1,6 @@
 pyrogram==2.0.106
-pillow==9.4.0
+tgcrypto==1.2.5
+pillow==10.0.0
+motor==3.3.1
 pymongo==4.5.0
-dnspython==2.3.0
-python-dotenv==0.21.1
-tgcrypto==1.2.2
+python-dotenv==1.0.0
