@@ -20,8 +20,8 @@ PK_STICKER_ID = os.getenv("pk_sticker_id")
 A14_STICKER_ID = os.getenv("a14_sticker_id")
 
 # Different sizes for each sticker
-PK_STICKER_SIZE = (300, 160)  # Width, Height for PK sticker
-A14_STICKER_SIZE = (220, 160)  # Width, Height for A14 sticker
+PK_STICKER_SIZE = (300, 140)  # Width, Height for PK sticker
+A14_STICKER_SIZE = (220, 100)  # Width, Height for A14 sticker
 
 # Temp Paths
 TEMP_DIR = "temp_files"
