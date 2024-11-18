@@ -110,7 +110,7 @@ async def start(client, message: Message):
         parse_mode = ParseMode.HTML
     )
 
-@espada.on_message(filter.photo)
+@espada.on_message(filters.photo)
 async def handle_image(client, message: Message):
     try:
         # Download the photo
