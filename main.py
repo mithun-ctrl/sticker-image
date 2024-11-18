@@ -4,6 +4,7 @@ from pyrogram.errors import FloodWait, RPCError
 from PIL import Image
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 from datetime import datetime
 from config import (
     API_ID, 
@@ -213,15 +214,7 @@ async def handle_sticker_selection(client, callback_query: CallbackQuery):
             except:
                 pass
 
-# Error handler for RPCErrors
-@app.on_error()
-async def error_handler(client, error):
-    if isinstance(error, FloodWait):
-        print(f"FloodWait error: {error.value} seconds")
-        await asyncio.sleep(error.value)
-    else:
-        print(f"An error occurred: {str(error)}")
-
+# Error handling is now implemented within each handler function
 if __name__ == "__main__":
     print("Bot is starting... 🚀")
     app.run()
