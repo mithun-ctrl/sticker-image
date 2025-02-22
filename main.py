@@ -200,7 +200,11 @@ async def handle_sticker_selection(client, callback_query: CallbackQuery):
             return
 
         # Get selected sticker
-        sticker_type = callback_query.data.split('_')[1]
+        sticker_type = callback_query.data.split('_')[1].lower()  # Convert to lowercase
+        if sticker_type not in STICKERS:
+            await callback_query.answer("❌ Invalid sticker type.", show_alert=True)
+            return
+            
         sticker_file_id = STICKERS[sticker_type]
 
         # Show processing message
