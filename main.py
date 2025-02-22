@@ -97,6 +97,9 @@ def get_sticker_selection_keyboard():
         [
             InlineKeyboardButton("PK", callback_data="sticker_pk"),
             InlineKeyboardButton("A14", callback_data="sticker_a14"),
+            InlineKeyboardButton("PKW", callback_data="sticker_pkw")
+        ],
+        [
             InlineKeyboardButton("Cancel", callback_data="cancel_sticker")
         ]
     ])
